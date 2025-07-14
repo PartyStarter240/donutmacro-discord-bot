@@ -47,6 +47,7 @@ const uuidChannelMap = new Map();
 // Configuration
 console.log('Loading environment variables...');
 const DISCORD_TOKEN = process.env.DISCORD_TOKEN;
+const ADMIN_ROLE_ID = process.env.ADMIN_ROLE_ID;
 const GUILD_ID = process.env.GUILD_ID;
 const CATEGORY_ID = process.env.CATEGORY_ID;
 const PORT = process.env.PORT || 3000;
@@ -58,6 +59,7 @@ console.log(`  HOST: ${HOST}`);
 console.log(`  DISCORD_TOKEN: ${DISCORD_TOKEN ? 'Set (hidden)' : 'NOT SET'}`);
 console.log(`  GUILD_ID: ${GUILD_ID || 'NOT SET'}`);
 console.log(`  CATEGORY_ID: ${CATEGORY_ID || 'NOT SET'}`);
+console.log(`  ADMIN_ROLE_ID: ${ADMIN_ROLE_ID || 'NOT SET'}`);
 console.log(`  NODE_ENV: ${process.env.NODE_ENV || 'not set'}`);
 
 // List all environment variables (be careful with this in production)
@@ -157,18 +159,45 @@ app.post('/send-update', async (req, res) => {
             const channelName = `updates-${uuid.substring(0, 8)}`.toLowerCase();
             
             try {
+                // Build permission overwrites array
+                const permissionOverwrites = [
+                    {
+                        // @everyone - cannot see the channel
+                        id: guild.id,
+                        deny: [PermissionFlagsBits.ViewChannel]
+                    },
+                    {
+                        // The bot - full access
+                        id: client.user.id,
+                        allow: [
+                            PermissionFlagsBits.ViewChannel,
+                            PermissionFlagsBits.SendMessages,
+                            PermissionFlagsBits.EmbedLinks,
+                            PermissionFlagsBits.ReadMessageHistory,
+                            PermissionFlagsBits.ManageMessages
+                        ]
+                    }
+                ];
+
+                // Add admin role if configured
+                if (ADMIN_ROLE_ID) {
+                    console.log(`Adding admin role (${ADMIN_ROLE_ID}) to channel permissions`);
+                    permissionOverwrites.push({
+                        id: ADMIN_ROLE_ID,
+                        allow: [
+                            PermissionFlagsBits.ViewChannel,
+                            PermissionFlagsBits.ReadMessageHistory,
+                            PermissionFlagsBits.SendMessages
+                        ]
+                    });
+                }
+
                 channel = await guild.channels.create({
                     name: channelName,
                     type: ChannelType.GuildText,
                     parent: CATEGORY_ID || null,
                     topic: `Updates for player UUID: ${uuid}`,
-                    permissionOverwrites: [
-                        {
-                            id: guild.id,
-                            allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.ReadMessageHistory],
-                            deny: [PermissionFlagsBits.SendMessages]
-                        }
-                    ]
+                    permissionOverwrites: permissionOverwrites
                 });
 
                 // Store the mapping
