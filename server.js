@@ -150,13 +150,22 @@ app.post('/send-update', async (req, res) => {
     }
 });
 
-// Catch-all route for undefined routes (important for Railway health checks)
-app.all('*', (req, res) => {
+// 404 handler - must be last middleware before error handler
+app.use((req, res, next) => {
     res.status(404).json({ 
         error: 'Not found', 
         status: 'Bot is running',
         path: req.path,
         method: req.method
+    });
+});
+
+// Error handling middleware
+app.use((err, req, res, next) => {
+    console.error('Express error:', err);
+    res.status(500).json({ 
+        error: 'Internal server error',
+        status: 'Bot is running'
     });
 });
 
