@@ -222,3 +222,17 @@ process.on('SIGINT', () => {
 
 // Keep the process alive (prevents container from exiting immediately)
 process.stdin.resume();
+
+// At the very bottom of server.js, after everything else
+setInterval(() => {
+    console.log(`[${new Date().toISOString()}] Bot is alive - Discord: ${client.user ? 'Connected' : 'Disconnected'}`);
+}, 30000); // Log every 30 seconds
+
+// Prevent the process from exiting
+process.on('uncaughtException', (err) => {
+    console.error('Uncaught Exception:', err);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+});
