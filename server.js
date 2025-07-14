@@ -3,8 +3,17 @@ const express = require('express');
 const bodyParser = require('body-parser');
 require('dotenv').config();
 
+// Catch errors early
+process.on('unhandledRejection', error => {
+  console.error('Unhandled promise rejection:', error);
+});
+process.on('uncaughtException', error => {
+  console.error('Uncaught exception:', error);
+});
+
 const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages] });
 const app = express();
+
 const PORT = process.env.PORT || 3000;
 
 app.use(bodyParser.json());
