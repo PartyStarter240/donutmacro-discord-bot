@@ -150,14 +150,30 @@ app.post('/send-update', async (req, res) => {
     }
 });
 
+// Catch-all route for undefined routes (important for Railway health checks)
+app.all('*', (req, res) => {
+    res.status(404).json({ 
+        error: 'Not found', 
+        status: 'Bot is running',
+        path: req.path,
+        method: req.method
+    });
+});
+
 // Error handling for Discord client
 client.on('error', (error) => {
     console.error('Discord client error:', error);
 });
 
-// Start server
-app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Express server listening on port ${PORT}`);
+// Start server with error handling
+const server = app.listen(PORT, '0.0.0.0', () => {
+    console.log(`Express server listening on 0.0.0.0:${PORT}`);
+});
+
+// Handle server errors
+server.on('error', (error) => {
+    console.error('Server error:', error);
+    process.exit(1);
 });
 
 // Login to Discord
@@ -169,6 +185,31 @@ client.login(DISCORD_TOKEN).catch(error => {
 // Graceful shutdown
 process.on('SIGTERM', () => {
     console.log('SIGTERM received, shutting down gracefully...');
-    client.destroy();
-    process.exit(0);
+    
+    // Close the Express server first
+    server.close(() => {
+        console.log('HTTP server closed');
+        
+        // Then disconnect the Discord client
+        client.destroy();
+        console.log('Discord client disconnected');
+        
+        // Exit the process
+        process.exit(0);
+    });
+    
+    // Force exit after 10 seconds if graceful shutdown fails
+    setTimeout(() => {
+        console.error('Forced shutdown after timeout');
+        process.exit(1);
+    }, 10000);
 });
+
+// Handle other termination signals
+process.on('SIGINT', () => {
+    console.log('SIGINT received, shutting down...');
+    process.emit('SIGTERM');
+});
+
+// Keep the process alive (prevents container from exiting immediately)
+process.stdin.resume();
