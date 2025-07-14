@@ -44,11 +44,13 @@ app.post('/send-update', async (req, res) => {
   res.status(200).send("Sent");
 });
 
-// ✅ Add this just before app.listen(...)
+// Health check endpoint
 app.get('/', (req, res) => {
   res.send('Bot is running');
 });
 
+// ✅ Bind to 0.0.0.0 for Railway
+app.listen(PORT, '0.0.0.0', () => console.log(`Listening on port ${PORT}`));
+
+// ✅ Login to Discord after setting up Express
 client.login(process.env.BOT_TOKEN);
-app.listen(PORT, () => console.log(`Listening on port ${PORT}`));
-setInterval(() => {}, 1000);
