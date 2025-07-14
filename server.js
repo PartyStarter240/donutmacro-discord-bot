@@ -1,11 +1,11 @@
-javascript
 const express = require('express');
+const bodyParser = require('body-parser');
 const { Client, GatewayIntentBits, ChannelType, PermissionFlagsBits } = require('discord.js');
 require('dotenv').config();
 
 // Initialize Express app
 const app = express();
-app.use(express.json());
+app.use(bodyParser.json());
 
 // Initialize Discord client
 const client = new Client({
@@ -22,7 +22,7 @@ const uuidChannelMap = new Map();
 // Configuration
 const DISCORD_TOKEN = process.env.DISCORD_TOKEN;
 const GUILD_ID = process.env.GUILD_ID;
-const CATEGORY_ID = process.env.CATEGORY_ID; // Optional: parent category for channels
+const CATEGORY_ID = process.env.CATEGORY_ID; // Optional
 const PORT = process.env.PORT || 3000;
 
 // Validate required environment variables
@@ -90,7 +90,7 @@ app.post('/send-update', async (req, res) => {
                 channel = await guild.channels.create({
                     name: channelName,
                     type: ChannelType.GuildText,
-                    parent: CATEGORY_ID || null, // Place in category if specified
+                    parent: CATEGORY_ID || null,
                     topic: `Updates for player UUID: ${uuid}`,
                     permissionOverwrites: [
                         {
@@ -150,33 +150,6 @@ app.post('/send-update', async (req, res) => {
     }
 });
 
-// Optional: Endpoint to list all tracked UUIDs
-app.get('/list-channels', (req, res) => {
-    const mappings = Array.from(uuidChannelMap.entries()).map(([uuid, channelId]) => ({
-        uuid,
-        channelId,
-        channelName: client.guilds.cache.get(GUILD_ID)?.channels.cache.get(channelId)?.name || 'Unknown'
-    }));
-    
-    res.json({
-        count: mappings.length,
-        channels: mappings
-    });
-});
-
-// Optional: Clean up deleted channels from memory
-async function cleanupDeletedChannels() {
-    const guild = client.guilds.cache.get(GUILD_ID);
-    if (!guild) return;
-
-    for (const [uuid, channelId] of uuidChannelMap.entries()) {
-        if (!guild.channels.cache.has(channelId)) {
-            uuidChannelMap.delete(uuid);
-            console.log(`Removed deleted channel mapping for UUID: ${uuid}`);
-        }
-    }
-}
-
 // Error handling for Discord client
 client.on('error', (error) => {
     console.error('Discord client error:', error);
@@ -192,9 +165,6 @@ client.login(DISCORD_TOKEN).catch(error => {
     console.error('Failed to login to Discord:', error);
     process.exit(1);
 });
-
-// Periodic cleanup (every 5 minutes)
-setInterval(cleanupDeletedChannels, 5 * 60 * 1000);
 
 // Graceful shutdown
 process.on('SIGTERM', () => {
