@@ -7,6 +7,11 @@ require('dotenv').config();
 const app = express();
 app.use(bodyParser.json());
 
+app.use((req, res, next) => {
+    console.log(`[${new Date().toISOString()}] ${req.method} ${req.path} from ${req.ip}`);
+    next();
+});
+
 // Initialize Discord client
 const client = new Client({
     intents: [
