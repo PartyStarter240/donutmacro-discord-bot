@@ -5,7 +5,7 @@ require('dotenv').config();
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages] });
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 
 app.use(bodyParser.json());
 
@@ -19,7 +19,7 @@ client.once('ready', () => {
 // Endpoint your Minecraft mod hits
 app.post('/send-update', async (req, res) => {
   const { uuid, message } = req.body;
-  const guild = client.guilds.cache.get('YOUR_GUILD_ID');
+  const guild = client.guilds.cache.get('1394350167225794703');
 
   if (!userChannelMap[uuid]) {
     const channel = await guild.channels.create({
