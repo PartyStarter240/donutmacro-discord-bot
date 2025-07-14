@@ -44,5 +44,10 @@ app.post('/send-update', async (req, res) => {
   res.status(200).send("Sent");
 });
 
+// ✅ Add this just before app.listen(...)
+app.get('/', (req, res) => {
+  res.send('Bot is running');
+});
+
 client.login(process.env.BOT_TOKEN);
 app.listen(PORT, () => console.log(`Listening on port ${PORT}`));
