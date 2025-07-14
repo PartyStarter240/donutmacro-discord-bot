@@ -51,3 +51,4 @@ app.get('/', (req, res) => {
 
 client.login(process.env.BOT_TOKEN);
 app.listen(PORT, () => console.log(`Listening on port ${PORT}`));
+setInterval(() => {}, 1000);
