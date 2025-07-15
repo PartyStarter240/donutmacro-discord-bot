@@ -365,7 +365,7 @@ app.post('/send-update', async (req, res) => {
                 embeds: [{
                     color: 0x00ff00,
                     author: {
-                    name: `Player: ${uuid.substring(0, 8)}...`
+                        name: `Player: ${uuid.substring(0, 8)}...`
                     },
                     description: message,
                     timestamp: new Date().toISOString(),
