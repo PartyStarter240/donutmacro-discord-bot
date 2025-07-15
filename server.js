@@ -361,12 +361,12 @@ app.post('/send-update', async (req, res) => {
         // Send the message
         try {
             await channel.send({
-                content: message,
                 embeds: [{
                     color: 0x00ff00,
                     author: {
                         name: `Player: ${uuid.substring(0, 8)}...`
                     },
+                    title: 'Service Update',
                     description: message,
                     timestamp: new Date().toISOString(),
                     footer: {
@@ -374,7 +374,7 @@ app.post('/send-update', async (req, res) => {
                     }
                 }]
             });
-
+        
             console.log(`Message sent to channel ${channel.name}`);
             res.json({ 
                 success: true, 
