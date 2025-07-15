@@ -41,8 +41,10 @@ const client = new Client({
 });
 console.log('Discord client created');
 
-// In-memory storage for UUID -> channelId mapping
-const uuidChannelMap = new Map();
+// In-memory storage
+const uuidChannelMap = new Map(); // UUID -> channelId mapping
+const uuidDiscordMap = new Map(); // UUID -> Discord User ID mapping
+const verificationCodes = new Map(); // Verification code -> {uuid, expires} mapping
 
 // Configuration
 console.log('Loading environment variables...');
@@ -76,12 +78,96 @@ if (!DISCORD_TOKEN || !GUILD_ID) {
     process.exit(1);
 }
 
+// Helper function to get UUID by verification code
+async function getUuidByCode(code) {
+    const data = verificationCodes.get(code);
+    if (!data) return null;
+    
+    if (Date.now() > data.expires) {
+        verificationCodes.delete(code);
+        return null;
+    }
+    
+    verificationCodes.delete(code); // Use once
+    return data.uuid;
+}
+
 // Discord bot ready event
-client.once('ready', () => {
+client.once('ready', async () => {
     console.log('=== DISCORD BOT READY ===');
     console.log(`Discord bot logged in as ${client.user.tag}`);
     console.log(`Watching guild: ${GUILD_ID}`);
     console.log(`Bot user ID: ${client.user.id}`);
+    
+    // Register slash command
+    try {
+        const guild = client.guilds.cache.get(GUILD_ID);
+        if (guild) {
+            await guild.commands.create({
+                name: 'linkmc',
+                description: 'Link your Minecraft account to Discord',
+                options: [{
+                    name: 'code',
+                    type: 3, // STRING type
+                    description: 'The verification code shown in Minecraft',
+                    required: true
+                }]
+            });
+            console.log('Registered /linkmc command');
+        }
+    } catch (error) {
+        console.error('Error registering slash command:', error);
+    }
+});
+
+// Handle slash commands
+client.on('interactionCreate', async interaction => {
+    if (!interaction.isCommand()) return;
+    
+    if (interaction.commandName === 'linkmc') {
+        try {
+            const code = interaction.options.getString('code').toUpperCase();
+            
+            // Look up the UUID by verification code
+            const uuid = await getUuidByCode(code);
+            
+            if (!uuid) {
+                return interaction.reply({
+                    content: '❌ Invalid or expired verification code! Please generate a new one in Minecraft.',
+                    ephemeral: true
+                });
+            }
+            
+            // Link the accounts
+            uuidDiscordMap.set(uuid, interaction.user.id);
+            console.log(`Linked UUID ${uuid} to Discord user ${interaction.user.id} (${interaction.user.tag})`);
+            
+            // Update channel permissions if it exists
+            const channelId = uuidChannelMap.get(uuid);
+            if (channelId) {
+                const channel = interaction.guild.channels.cache.get(channelId);
+                if (channel) {
+                    await channel.permissionOverwrites.create(interaction.user.id, {
+                        ViewChannel: true,
+                        ReadMessageHistory: true,
+                        SendMessages: true
+                    });
+                    console.log(`Updated channel permissions for user ${interaction.user.id}`);
+                }
+            }
+            
+            await interaction.reply({
+                content: `✅ Successfully linked your Discord account to Minecraft!\nUUID: \`${uuid.substring(0, 8)}...\`\nYou can now see your private updates channel.`,
+                ephemeral: true
+            });
+        } catch (error) {
+            console.error('Error in linkmc command:', error);
+            await interaction.reply({
+                content: '❌ An error occurred while linking your account. Please try again.',
+                ephemeral: true
+            });
+        }
+    }
 });
 
 // Discord connection events
@@ -111,6 +197,53 @@ app.get('/', (req, res) => {
 app.get('/test', (req, res) => {
     console.log('Test endpoint hit!');
     res.send('Test successful');
+});
+
+// Endpoint to generate verification code
+app.post('/generate-code', async (req, res) => {
+    console.log('Generate-code endpoint hit!');
+    try {
+        const { uuid } = req.body;
+        
+        if (!uuid) {
+            return res.status(400).json({ error: 'Missing UUID' });
+        }
+        
+        // Check if already linked
+        if (uuidDiscordMap.has(uuid)) {
+            return res.json({ 
+                success: false,
+                message: 'This UUID is already linked to a Discord account',
+                alreadyLinked: true
+            });
+        }
+        
+        // Generate random 6-character code
+        const code = Math.random().toString(36).substring(2, 8).toUpperCase();
+        
+        // Store with 5-minute expiry
+        verificationCodes.set(code, {
+            uuid: uuid,
+            expires: Date.now() + 300000 // 5 minutes
+        });
+        
+        // Clean up expired codes
+        setTimeout(() => {
+            verificationCodes.delete(code);
+            console.log(`Verification code ${code} expired`);
+        }, 300000);
+        
+        console.log(`Generated verification code ${code} for UUID ${uuid}`);
+        
+        res.json({ 
+            success: true,
+            code: code,
+            expiresIn: 300 // seconds
+        });
+    } catch (error) {
+        console.error('Error generating code:', error);
+        res.status(500).json({ error: 'Failed to generate verification code' });
+    }
 });
 
 // Main endpoint for Minecraft mod updates
@@ -191,6 +324,20 @@ app.post('/send-update', async (req, res) => {
                         ]
                     });
                 }
+                
+                // Add linked Discord user if exists
+                const linkedDiscordId = uuidDiscordMap.get(uuid);
+                if (linkedDiscordId) {
+                    console.log(`Adding linked Discord user ${linkedDiscordId} to channel`);
+                    permissionOverwrites.push({
+                        id: linkedDiscordId,
+                        allow: [
+                            PermissionFlagsBits.ViewChannel,
+                            PermissionFlagsBits.ReadMessageHistory,
+                            PermissionFlagsBits.SendMessages
+                        ]
+                    });
+                }
 
                 channel = await guild.channels.create({
                     name: channelName,
@@ -218,7 +365,7 @@ app.post('/send-update', async (req, res) => {
                 embeds: [{
                     color: 0x00ff00,
                     author: {
-                        name: `Player: ${uuid.substring(0, 8)}...`
+                    name: `Player: ${uuid.substring(0, 8)}...`
                     },
                     description: message,
                     timestamp: new Date().toISOString(),
@@ -376,6 +523,9 @@ setInterval(() => {
     console.log(`  Memory: ${Math.round(memUsage.heapUsed / 1024 / 1024)}MB / ${Math.round(memUsage.heapTotal / 1024 / 1024)}MB`);
     console.log(`  Uptime: ${Math.round(process.uptime())}s`);
     console.log(`  Server listening: ${server.listening}`);
+    console.log(`  Active UUIDs: ${uuidChannelMap.size}`);
+    console.log(`  Linked accounts: ${uuidDiscordMap.size}`);
+    console.log(`  Pending codes: ${verificationCodes.size}`);
 }, 30000);
 
 // Keep process alive
